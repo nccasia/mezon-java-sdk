@@ -1,0 +1,248 @@
+/*
+ * Copyright 2023 Heroic Labs
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+
+// dependencies required by the gradle build script itself
+buildscript {
+    repositories {
+        // where to resolve the dependencies
+        maven {
+            url 'https://maven-central.storage-download.googleapis.com/repos/central/data/'
+        }
+        google()
+    }
+}
+
+plugins {
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+    id 'io.freefair.lombok' version '8.10.2'
+    //for distTar which is called when importing this SDK w/ JitPack
+    id 'distribution'
+    id 'maven-publish'
+    id 'java'
+    id 'java-library'
+}
+
+lombok {
+    version = '1.18.34'
+}
+
+group = 'com.github.heroiclabs'
+version = '2.5.3'
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+repositories {
+    // where to pull dependencies from
+    maven {
+        url 'https://maven-central.storage-download.googleapis.com/repos/central/data/'
+    }
+    mavenLocal()
+    mavenCentral()
+}
+
+configurations {
+    sharedApi.extendsFrom api
+    sharedImplementation.extendsFrom implementation
+    sharedTestImplementation.extendsFrom testImplementation
+}
+
+dependencies {
+    shadow localGroovy()
+    shadow gradleApi()
+
+    implementation 'com.google.code.gson:gson:2.11.0'
+    api 'io.grpc:grpc-protobuf:1.68.0'
+    api 'io.grpc:grpc-core:1.68.0'
+    // listenable future is part of the SDK public API
+    api 'com.google.guava:guava:33.3.1-android'
+    implementation 'com.google.protobuf:protobuf-java:4.28.2'
+    implementation 'com.google.protobuf:protobuf-java-util:4.28.2'
+
+    implementation('io.grpc:grpc-okhttp:1.68.0') {
+        exclude group: 'com.squareup.okio', module:'okio'
+    }
+    implementation 'javax.websocket:javax.websocket-api:1.1'
+
+    implementation 'com.squareup.okio:okio:3.9.1'
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    implementation 'javax.annotation:javax.annotation-api:1.3.2'
+    implementation 'io.grpc:grpc-netty-shaded:1.68.0'
+    implementation 'io.grpc:grpc-stub:1.68.0'
+    compileOnly 'org.apache.tomcat:annotations-api:6.0.53'
+    implementation 'org.slf4j:slf4j-simple:1.7.36'
+    implementation 'com.azure:azure-core-serializer-json-gson:1.2.11'
+    implementation 'com.auth0:java-jwt:4.4.0'
+
+    testImplementation 'junit:junit:4.13.2'
+}
+
+def pomConfig = {
+    licenses {
+        license {
+            name 'The Apache Software License, Version 2.0'
+            url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+            distribution 'repo'
+        }
+    }
+    developers {
+        developer {
+            id 'andreimihu'
+            name 'Andrei Mihu'
+            email 'andrei@heroiclabs.com'
+        }
+        developer {
+            id 'cmolozian'
+            name 'Chris Molozian'
+            email 'chris@heroiclabs.com'
+        }
+        developer {
+            id 'mofirouz'
+            name 'Mo Firouz'
+            email 'mo@heroiclabs.com'
+        }
+    }
+    scm {
+        url 'https://github.com/heroiclabs/nakama-java'
+    }
+}
+
+task nakamaJar(type: Jar) {
+    manifest {
+        attributes 'Implementation-Title': 'Nakama client',
+                   'Implementation-Version': "$project.version"
+    }
+    archiveBaseName = 'nakama-java'
+    version = project.version
+    from sourceSets.main.output
+    exclude 'com/heroiclabs/satori'
+}
+
+task satoriJar(type: Jar) {
+    manifest {
+        attributes 'Implementation-Title': 'Satori client',
+                   'Implementation-Version': "$project.version"
+    }
+    archiveBaseName = 'satori-java'
+    version = project.version
+    from sourceSets.main.output
+    exclude 'com/heroiclabs/nakama'
+}
+
+publishing {
+    publications {
+        nakama(MavenPublication) {
+            artifact nakamaJar
+            artifactId 'nakama-java'
+            groupId "$project.group"
+            version "$project.version"
+
+            pom.withXml {
+                def root = asNode()
+                root.appendNode('description', 'Java client for Nakama server.')
+                root.appendNode('name', 'Nakama client')
+                root.appendNode('url', 'https://heroiclabs.com/docs/nakama/client-libraries/java/')
+
+                def dependenciesNode = root.appendNode('dependencies')
+                configurations.implementation.allDependencies.each {
+                    def dependencyNode = dependenciesNode.appendNode('dependency')
+                    dependencyNode.appendNode('groupId', it.group)
+                    dependencyNode.appendNode('artifactId', it.name)
+                    dependencyNode.appendNode('version', it.version)
+                }
+
+                root.children().last() + pomConfig
+            }
+        }
+
+        satori(MavenPublication) {
+            artifact satoriJar
+            artifactId 'satori-java'
+            groupId "$project.group"
+            version "$project.version"
+
+            pom.withXml {
+                def root = asNode()
+                root.appendNode('description', 'Java client for Satori server.')
+                root.appendNode('name', 'Satori client')
+                root.appendNode('url', 'https://heroiclabs.com/docs/satori/client-libraries/java/')
+
+                def dependenciesNode = root.appendNode('dependencies')
+                configurations.implementation.allDependencies.each {
+                    def dependencyNode = dependenciesNode.appendNode('dependency')
+                    dependencyNode.appendNode('groupId', it.group)
+                    dependencyNode.appendNode('artifactId', it.name)
+                    dependencyNode.appendNode('version', it.version)
+                }
+
+                root.children().last() + pomConfig
+            }
+        }
+    }
+}
+
+task nakamaTest(type: Test) {
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    exclude 'com/heroiclabs/satori'
+}
+
+task satoriTest(type: Test) {
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    exclude 'com/heroiclabs/nakama'
+}
+
+tasks.named('shadowJar', ShadowJar) {
+    enableRelocation true
+    relocationPrefix 'heroiclabs'
+    configurations = [project.configurations.sharedImplementation,
+                      project.configurations.sharedApi]
+}
+
+task nakamaShadowJar(type: ShadowJar) {
+    enableRelocation true
+    relocationPrefix 'heroiclabs'
+
+    configurations = [project.configurations.sharedImplementation,
+                    project.configurations.sharedApi]
+    from sourceSets.main.output
+    exclude 'com/heroiclabs/satori'
+    archiveFileName.set("nakama-java-${version}-all.jar")
+}
+
+task satoriShadowJar(type: ShadowJar) {
+    enableRelocation true
+    relocationPrefix 'heroiclabs'
+
+    configurations = [project.configurations.sharedImplementation,
+                    project.configurations.sharedApi]
+    from sourceSets.main.output
+    exclude 'com/heroiclabs/nakama'
+    archiveFileName.set("satori-java-${version}-all.jar")
+}
+
+javadoc {
+    destinationDir = file('docs')
+    options.addBooleanOption('Xdoclint:-missing', true)
+}
+
+test {
+    testLogging.showStandardStreams = true
+    testLogging.exceptionFormat = 'full'
+}
