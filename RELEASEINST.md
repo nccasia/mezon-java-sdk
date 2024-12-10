@@ -9,8 +9,8 @@ To generate a new package run `gradle build shadowJar`. You can find the generat
 
 ```
 build/libs/
-├── nakama-java-${version}-all.jar
-└── nakama-java-${version}.jar
+├── mezon-java-sdk-${version}-all.jar
+└── mezon-java-sdk-${version}.jar
 ```
 
 ### Full release workflow

@@ -2,11 +2,11 @@ version: v2
 managed:
   enabled: true
   override:
-    - module: buf.build/heroiclabs/nakama-java
+    - module: buf.build/heroiclabs/mezon-java-sdk
       file_option: java_package_prefix
       value: com.heroiclabs
   disable:
-    - module: buf.build/heroiclabs/nakama-java
+    - module: buf.build/heroiclabs/mezon-java-sdk
       file_option: java_package_prefix
 plugins:
   - remote: buf.build/protocolbuffers/java:v28.2

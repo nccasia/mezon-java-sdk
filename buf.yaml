@@ -1,7 +1,7 @@
 # For details on buf.yaml configuration, visit https://buf.build/docs/configuration/v2/buf-yaml
 version: v2
 modules:
-  - name: buf.build/heroiclabs/nakama-java
+  - name: buf.build/heroiclabs/mezon-java-sdk
     path: proto
 lint:
   use:
