@@ -1,12 +1,8 @@
 package com.heroiclabs.mezon.socket;
 
-import com.heroiclabs.mezon.model.ApiMessageAttachment;
-import com.heroiclabs.mezon.model.ApiMessageMention;
-import com.heroiclabs.mezon.model.ApiMessageRef;
-import com.heroiclabs.mezon.model.ClanJoin;
+import com.heroiclabs.mezon.model.*;
 import com.heroiclabs.mezon.session.Session;
-import com.heroiclabs.nakama.Channel;
-import com.heroiclabs.nakama.ChannelMessageAck;
+
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
