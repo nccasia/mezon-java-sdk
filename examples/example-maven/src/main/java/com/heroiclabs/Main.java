@@ -26,7 +26,7 @@ import com.heroiclabs.nakama.api.Account;
 public class Main {
 
     public static void main(String[] args) {
-        DefaultClient client = new DefaultClient("defaultkey", "127.0.0.1", 7349, false);
+        Client client = new MezonClient();
         ExecutorService executor = Executors.newSingleThreadExecutor();
 
         String email = "super@heroes.com";

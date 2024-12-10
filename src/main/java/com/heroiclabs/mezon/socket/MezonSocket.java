@@ -21,17 +21,16 @@ import com.google.common.util.concurrent.SettableFuture;
 import com.google.gson.*;
 
 import com.google.type.Date;
-import com.heroiclabs.mezon.model.ApiMessageAttachment;
-import com.heroiclabs.mezon.model.ApiMessageMention;
-import com.heroiclabs.mezon.model.ApiMessageRef;
-import com.heroiclabs.mezon.model.GsonDateDeserializer;
+import com.heroiclabs.mezon.model.*;
 import com.heroiclabs.mezon.session.Session;
-import com.heroiclabs.nakama.ChannelMessageAck;
 
 import lombok.NonNull;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
 
+import javax.websocket.DeploymentException;
+import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +42,9 @@ import java.util.concurrent.*;
 @Slf4j
 public class MezonSocket implements SocketClient {
     public static final int DEFAULT_TIMEOUT_MS = 5000;
+    public static final int DefaultHeartbeatTimeoutMs = 10000;
+    public static final int DefaultSendTimeoutMs = 10000;
+    public static final int DefaultConnectTimeoutMs = 30000;
 
     // The interval at which to send Ping frames to the server.
     public static final int DEFAULT_PING_MS = 5000;
@@ -52,36 +54,138 @@ public class MezonSocket implements SocketClient {
             .registerTypeHierarchyAdapter(byte[].class, new ByteArrayToBase64TypeAdapter())
             .registerTypeAdapter(Date.class, new GsonDateDeserializer())
             .create();
-
+    private final int heartbeatTimeoutMs = DefaultHeartbeatTimeoutMs;
     private final String host;
-    private final int port;
+    private final String port;
     private final boolean ssl;
     private final boolean verbose;
-
-    private ExecutorService listenerThreadExec;
+    private Session session;
     private WebSocket socket;
     WebSocketAdapter adapter;
     public MezonSocket(String host, String port, boolean useSSL, boolean verbose, WebSocketAdapter adapter) {
         this.host = host;
-        this.port = Integer.parseInt(port);
+        this.port = port;
         this.ssl = useSSL;
         this.verbose= verbose;
         this.adapter = adapter;
     }
 
+    @SneakyThrows
     @Override
-    public void close() {
-
+    public void close() throws IOException {
+        adapter.close();
     }
 
     @Override
     public boolean isOpen() {
-        return false;
+        return adapter.isOpen();
     }
 
-    @Override
     public CompletableFuture<Session> connect(Session session, boolean createStatus, Integer connectTimeoutMs) {
-        return null;
+        CompletableFuture<Session> future = new CompletableFuture<>();
+        String scheme = (this.ssl) ? "wss://" : "ws://";
+
+        try {
+            // Kết nối với adapter
+            adapter.connect(scheme, this.host, this.port, createStatus, session.getAuthToken());
+
+            this.adapter.setOnOpen((evt) -> {
+                if (this.verbose) {
+                    System.out.println("Connection opened: " + evt);
+                }
+                this.pingPong();
+                future.complete(session);
+            });
+
+            this.adapter.setOnClose((closeReason) -> {
+                System.out.println("Connection closed: " + closeReason.getReasonPhrase());
+                System.out.println("Close code: " + closeReason.getCloseCode());
+            });
+
+            // Xử lý sự kiện khi có lỗi xảy ra
+            this.adapter.setOnError((throwable) -> {
+                System.err.println("Connection error: " + throwable.getMessage());
+                future.completeExceptionally(throwable);
+                try {
+                    this.adapter.close();
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+
+            this.adapter.setOnMessage((message) -> {
+                if (this.verbose) {
+                    System.out.println("Response: " + message.toString());
+                }
+            });
+
+            CompletableFuture.runAsync(() -> {
+                try {
+                    TimeUnit.MILLISECONDS.sleep(connectTimeoutMs);
+                    if (!future.isDone()) {
+                        future.completeExceptionally(new TimeoutException("The socket timed out when trying to connect."));
+                        this.adapter.close();
+                    }
+                } catch (InterruptedException | IOException e) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+
+        } catch (IOException | DeploymentException e) {
+            future.completeExceptionally(e);
+        }
+
+        return future;
+    }
+
+    public void pingPong() {
+        if (!this.adapter.isOpen()) {
+            return;
+        }
+
+        sendPingWithTimeout().exceptionally(ex -> {
+            if (this.adapter.isOpen()) {
+                if (this.verbose) {
+                    System.err.println("Server unreachable from heartbeat.");
+                }
+                this.onHeartbeatTimeout();
+                try {
+                    this.adapter.close();
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+            return null;
+        });
+    }
+
+    private CompletableFuture<Void> sendPingWithTimeout() {
+        CompletableFuture<Void> future = new CompletableFuture<>();
+
+        // Gửi ping với timeout
+        this.sendPing()
+                .orTimeout(this.heartbeatTimeoutMs, TimeUnit.MILLISECONDS)
+                .thenAccept(response -> future.complete(null))
+                .exceptionally(ex -> {
+                    future.completeExceptionally(ex);
+                    return null;
+                });
+
+        return future;
+    }
+
+    private CompletableFuture<Void> sendPing() {
+        return CompletableFuture.runAsync(() -> {
+            try {
+                adapter.send("{\"ping\": {}}");
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to send ping", e);
+            }
+        });
+    }
+
+    private void onHeartbeatTimeout() {
+        System.err.println("Heartbeat timeout occurred.");
     }
 
     @Override
@@ -104,12 +208,5 @@ public class MezonSocket implements SocketClient {
             return BaseEncoding.base64().decode(jsonElement.getAsString());
         }
     }
-
-    // The connect, read and write timeout for new connections.
-
-
-
-
-
 
 }

@@ -10,6 +10,7 @@ import com.heroiclabs.mezon.socket.WebSocketAdapter;
 import com.heroiclabs.mezon.socket.WebSocketAdapterText;
 import com.heroiclabs.mezon.socket.SocketClient;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
@@ -104,8 +105,11 @@ public class MezonClient implements Client {
     /** Close the socket connection. */
     public void closeSocket() {
         this.isHardDisconnect = true;
-        socket.close();
+        try {
+            socket.close();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
-    // Implement other methods as needed...
 }

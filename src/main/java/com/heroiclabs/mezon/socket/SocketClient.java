@@ -4,11 +4,12 @@ import com.heroiclabs.mezon.model.*;
 import com.heroiclabs.mezon.session.Session;
 
 
+import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 public interface SocketClient {
-    void close();
+    void close() throws IOException;
 
     boolean isOpen();
 
